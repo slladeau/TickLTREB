@@ -1,0 +1,312 @@
+---
+title: "Ecosphere.TickPrevalenceMs"
+author: "slladeau"
+date: "2025-09-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse,
+               dplyr,
+               lme4,
+               lmerTest,
+               ggplot2,
+               lubridate, 
+               patchwork,
+               brms,
+               MASS)
+            
+
+dat.DM=read_csv("DIN.Data.for.MS.csv") ##54 rows by 62 columns
+
+usedat=dat.DM%>%
+  mutate(DON=Quest_mnNm2,
+         DONc=round(Quest_mnNct),
+         DIN=DON * PinfN,
+         DINc=round(DONc * PinfN),
+         DINBb= DON*Bburgd,
+         DINBbc=round(DONc * Bburgd), #ranges from 0 to 7 per grid-year
+         DINBmic=round(DONc * babes), #ranges from 0 to 10
+         DINAphc=round(DONc * Anph), #ranges from 0 to 2
+         PLlarv.mnScale=scale(PLlarv.mn),
+         PL.mnRawLyrScale=scale(PL.mnRawLyr),
+         TSlarv.mnScale=scale(TSlarv.mn),
+         TS.mnRawLyrScale=scale(TS.mnRawLyr),
+         logTSfedLarvScale=scale(logTSfedLarv))
+
+datNIP.DM=read_csv("NIP.Data.for.MS.csv") ##2017 rows by 25 columns
+
+```
+
+Set-up and run DON model
+```{r}
+
+priors.poisson <- c(
+  prior(normal(0, 2), class = "b"),
+  prior(normal(0, 1), class = "sd", lb = 0)
+)
+
+prevModeldat=usedat
+
+##Full models with larval burden and host abundance by species
+mod.DONct.PLFull<-brm(formula=DONc ~  PLlarv.mnScale * PL.mnRawLyrScale + (1|Year), data=prevModeldat,
+              family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99)) 
+ pp_check(mod.DONct.PLFull)
+       
+mod.DONct.TSFull<-brm(formula=DONc ~  TSlarv.mnScale * TS.mnRawLyrScale + (1|Year), data=prevModeldat,
+              family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99)) 
+pp_check(mod.DONct.TSFull)
+
+
+```
+
+DIN models
+```{r}
+mod.PLFull<-brm(formula=DINBbc ~  PLlarv.mnScale * PL.mnRawLyrScale + (1|Year), data=prevModeldat,
+              family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99)) 
+
+mod.TSFull<-brm(formula=DINBbc ~  TSlarv.mnScale * TS.mnRawLyrScale + (1|Year), data=prevModeldat,
+              family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99)) 
+
+##Univariate models to evaluate mechanistic prediction skill
+
+mod.DINBb.base<-brm(formula=DINBbc ~ 1 + (1|Year), data=prevModeldat,
+              family= poisson(),
+              chains=4, iter=4000,warmup=1000,seed=1011,
+              control = list(adapt_delta = 0.95))
+loo_DINBb.base=loo(mod.DINBb.base)
+pp_check(mod.DINBb.base) 
+
+
+mod.DINBb.PL_larv<-brm(formula=DINBbc ~  PLlarv.mnScale + (1|Year), data=prevModeldat,
+              family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99)) 
+loo_DINBb.PL_larv=loo(mod.DINBb.PL_larv)
+
+mod.DINBb.PLhost<-brm(formula=DINBbc ~ PL.mnRawLyrScale  + (1|Year), data=prevModeldat,
+              family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99))
+loo_DINBb.PLhost=loo(mod.DINBb.PLhost)
+
+mod.DINBb.PLFedL<-brm(formula=DINBbc ~  logPLfedLarvScale + (1|Year) , data=prevModeldat,
+              family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99))
+loo_mod.DINBb.PLFedL=loo(mod.DINBb.PLFedL) 
+
+
+###Repeat for TS host metrics
+
+mod.DINBb.TShost<-brm(formula=DINBbc ~ TS.mnRawLyrScale + (1|Year), data=prevModeldat,
+            family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99))
+loo_DINBb.TShost=loo(mod.DINBb.TShost) #1 obs with pareto_k out of range
+
+mod.DINBb.TS_larv<-brm(formula=DINBbc ~  TSlarv.mnLogScale + (1|Year), data=prevModeldat,
+             family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99))
+loo_DINBb.TS_larv=loo(mod.DINBb.TS_larv)
+
+      
+mod.DINBb.TSFedL<-brm(formula=DINBbc ~  logTSfedLarvScale + (1|Year) , data=prevModeldat,
+            family= poisson(),
+             prior=priors.poisson,
+        chains=4, iter=4000,warmup=1000,seed=1011,
+        control = list(adapt_delta = 0.99))
+loo_mod.DINBb.TSFedL=loo(mod.DINBb.TSFedL)
+
+loo_compare(loo_DINBb.base,loo_DINBb.PLhost,loo_mod.DINBb.PLFedL,loo_DINBb.PL_larv,loo_DINBb.TShost,loo_mod.DINBb.TSFedL,loo_DINBb.TS_larv) #
+```
+
+NIP models
+```{r}
+
+usedat=datNIP.DM
+
+#Binary Response: Use bernouli infection model to evaluate probability an individual tick is infected
+priors.base <- c(
+  prior(student_t(3, 0, 2.5), class = "Intercept"),
+  prior(student_t(3, 0, 1), class = "sd")
+)
+priors <- c(
+  prior(student_t(3, 0, 2.5), class = "Intercept"),
+  prior(normal(0, 1), class = "b"),      # after scaling 
+  prior(student_t(3, 0, 1), class = "sd")
+)
+
+#Full models
+PLFull<- bf(B.burgdorferi~ PLlarv.mnScale * PL.mnRawLyrScale +  (1|Year))
+model_fullPL <- brm(
+  formula = PLFull,
+ data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+
+TSFull<- bf(B.burgdorferi~ TSlarv.mnScale * TS.mnRawLyrScale +  (1|Year))
+model_fullTS <- brm(
+  formula = TSFull,
+ data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+
+
+#Univariate models to compare predictive skill
+base= bf(B.burgdorferi ~ 1 + (1|Year))  ##no div
+model_base.re <- brm(
+  formula = base,
+  data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors.base,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+loo_D0N.base=loo(model_base.re)
+
+PLlarvTot= bf(B.burgdorferi ~ PLfedLarvScale +  (1|Year))
+model_PLlarvTot <- brm(
+  formula = PLlarvTot,
+  data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+
+loo_PLlarvTot=loo(model_PLlarvTot)
+
+#does TS fed larvae last year predict infection prev?
+larvTSTot<- bf(B.burgdorferi~ TSfedLarvScale + (1|Year))
+model_totTSlarv <- brm(
+  formula =larvTSTot,
+ data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+
+loo_totTSlarv=loo(model_totTSlarv)
+
+PLlarv<- bf(B.burgdorferi~ PLlarv.mnScale +  (1|Year))
+model_larvonPL <- brm(
+  formula = PLlarv,
+ data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+loo_larvonPL=loo(model_larvonPL)
+
+PLmna<- bf(B.burgdorferi~ PL.mnRawLyrScale + (1|Year))
+model_PLabund <- brm(
+  formula = PLmna,
+data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+loo_PLabund=loo(model_PLabund)
+
+TSlarv<- bf(B.burgdorferi~ TSlarv.mnScale +  (1|Year))
+model_larvonTS <- brm(
+  formula = TSlarv,
+ data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+loo_larvonTS=loo(model_larvonTS)
+
+TSmna<- bf(B.burgdorferi~ TS.mnRawLyrScale  +  (1|Year))
+model_TSabund <- brm(
+  formula = TSmna,
+data = usedat,
+  family = bernoulli(link = "logit"),
+  prior = priors,
+  control = list(adapt_delta = 0.99),
+ chains=4, iter=4000,warmup=1000,seed=3401)
+loo_TSabund=loo(model_TSabund)
+
+loo_compare(loo_D0N.base,loo_D0N.TSfull,loo_D0N.PLfull,loo_PLlarvTot,loo_totTSlarv,loo_TSabund,loo_PLabund,loo_larvonPL,loo_larvonTS)
+
+
+
+
+
+```
+
+Predictions
+```{r}
+
+#DIN
+usemodel=mod.DINBb.base
+#generate posterior predictions
+
+pred_vals=as.matrix(posterior_predict(usemodel, draws =10000), re_formula=~(1|Year)) #no Grid re effect
+pred.values.mn= apply(pred_vals,2,mean) # (margin = 1 means over columns)
+
+sd.values=apply(pred_vals,2, sd)
+Hci.values=apply(pred_vals,2,quantile,probs=0.95)
+Lci.values=apply(pred_vals,2,quantile,probs=0.05)
+
+usedatPred=usedat
+usedatPred$predictedDINBb=pred.values.mn
+usedatPred$sd.predicted=sd.values
+usedatPred$Hci.predicted=Hci.values
+usedatPred$Lci.predicted=Lci.values
+
+cor.test(usedatPred$predictedDINBb,usedatPred$DINBbc) 
+
+#NIP
+usedatPredNIP=usedat
+usemodel=model_larvonTS
+pp_check(usemodel, type='bars')
+
+#generate posterior predictions
+pred_vals=as.matrix(posterior_predict(usemodel, type="response", draws =1000),re_formula=~(1|Year) )# generates 8000 draws (rows) for each tick ((columns))
+
+pred.values.mn= apply(pred_vals,2,mean) 
+set.seed(333)  # Setting a seed for reproducibility
+pred_inf <- sapply(pred.values.mn, function(p) rbinom(1, 1, p)) ##returns a 1 with probability p
+
+usedatPredNIP=datNIP.DM
+usedatPredNIP$bb.modpreds_Inf=pred_inf
+usedatPredNIP$bb.modpreds_ProbInf=pred.values.mn
+
+InfPredict_YrGrid=usedatPredNIP%>% 
+  group_by(Grid,Year)%>%
+  summarize(n=n(),
+             obs_PinfN=mean(B.burgdorferi),  #observed
+              obsClass=sum(B.burgdorferi),
+             pred_inf=mean(bb.modpreds_Inf),
+             pred_Pinf=mean(bb.modpreds_ProbInf),
+             se_predPinf=mean(bb.modpreds_ProbInf)/sqrt(n))
+
+cor.test(InfPredict_YrGrid$obs_PinfN, InfPredict_YrGrid$pred_Pinf)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
