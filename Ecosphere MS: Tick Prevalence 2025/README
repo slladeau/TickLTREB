@@ -1,0 +1,15 @@
+
+Files associated with manuscript: Ecological dynamics of blacklegged ticks, their vertebrate hosts, and associated zoonotic pathogens in northeastern forests
+Authors: Shannon L. LaDeau, Kelly Oggenfuss, Alexander Schmidt, Saravanan Thangamani, and Richard S. Ostfeld
+
+ ├── DIN and NIP csv data files   
+ ├── Code.for.MS.Rmd   # Main R Markdown analysis file demonstrating models and prediction process 
+ ├── README.md      # This file
+
+Code was run using R version 4.3.2 (2023-10-31) -- "Eye Holes"
+Copyright (C) 2023 The R Foundation for Statistical Computing
+Platform: x86_64-apple-darwin20 (64-bit) 
+ 
+Citation/Acknowledgement: LaDeau,S.L., Oggenfuss,K., Schmidt,A., Thangamani,S., and R.S. Ostfeld. Ecological dynamics of blacklegged ticks, their vertebrate hosts, and associated zoonotic pathogens in northeastern forests. In review
+
+
